@@ -1,5 +1,4 @@
 mod app;
-mod state;
 
 use crate::app::App;
 fn main() {

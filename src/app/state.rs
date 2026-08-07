@@ -1,12 +1,6 @@
 use std::sync::Arc;
 
-use winit::{
-    application::ApplicationHandler,
-    event::*,
-    event_loop::{ActiveEventLoop, EventLoop},
-    keyboard::{KeyCode, PhysicalKey},
-    window::Window,
-};
+use winit::window::Window;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -29,5 +23,5 @@ impl State {
     pub fn render(&mut self) {
         // Handle rendering
         self.window.request_redraw();
-   }
+    }
 }

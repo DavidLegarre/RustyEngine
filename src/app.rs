@@ -1,4 +1,7 @@
-use crate::state::State;
+use crate::app::state::State;
+
+pub mod application_handler;
+pub mod state;
 
 pub struct App {
     #[cfg(target_arch = "wasm32")]

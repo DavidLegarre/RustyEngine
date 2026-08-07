@@ -74,11 +74,34 @@ impl ApplicationHandler<State> for App {
 
     fn window_event(
         &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
-        _event: winit::event::WindowEvent,
+        event: WindowEvent,
     ) {
-        // Left empty intentionally to compile
-    }
+        let state = match &mut self.state {
+            Some(canvas) => canvas,
+            None => return,
+        };
 
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::RedrawRequested => {
+                state.render();
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => match (code, key_state.is_pressed()) {
+                (KeyCode::Escape, true) => event_loop.exit(),
+                _ => {}
+            },
+            _ => {}
+        }
+    }
 }

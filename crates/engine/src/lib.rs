@@ -1,7 +1,7 @@
-use winit::event_loop::EventLoop;
+pub mod app;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let event_loop = EventLoop::new()?;
-    event_loop.run_app(&mut App { window: None })?;
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let event_loop = winit::event_loop::EventLoop::new()?;
+    event_loop.run_app(&mut app::event_loop::App::default())?;
     Ok(())
 }

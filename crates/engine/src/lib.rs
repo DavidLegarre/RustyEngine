@@ -1,4 +1,5 @@
 pub mod app;
+pub mod render;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = winit::event_loop::EventLoop::new()?;

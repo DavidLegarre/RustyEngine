@@ -119,7 +119,7 @@ impl Renderer {
         Ok(config)
     }
 
-    fn create_triangle_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+    pub(crate) fn create_triangle_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(vertex::VERTICES),
@@ -127,7 +127,7 @@ impl Renderer {
         })
     }
 
-    fn create_pipeline(
+    pub(crate) fn create_pipeline(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
     ) -> Result<wgpu::RenderPipeline, Box<dyn Error>> {
@@ -148,15 +148,7 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: 3 * std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        offset: 0,
-                        shader_location: 0,
-                        format: wgpu::VertexFormat::Float32x3,
-                    }],
-                })],
+                buffers: &[Some(vertex::Vertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {

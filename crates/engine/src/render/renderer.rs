@@ -1,4 +1,6 @@
+use std::error::Error;
 use std::sync::Arc;
+
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::window::Window;
 
@@ -12,26 +14,27 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: Arc<Window>) -> Self {
+    pub fn new(window: Arc<Window>) -> Result<Self, Box<dyn Error>> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
-        let surface = instance.create_surface(window.clone()).unwrap();
-        let (adapter, device, queue) = Self::request_gpu(&instance, &surface);
-        let size = window.inner_size();
-        let config = Self::configure_surface(&surface, &adapter, &device, size);
-        let vertex_buffer = Self::create_triangle_buffer(&device);
+        let surface = instance.create_surface(window.clone())?;
 
-        let pipeline = Self::create_pipeline(&device, config.format);
-        Self {
+        let (adapter, device, queue) = Self::request_gpu(&instance, &surface)?;
+        let config = Self::configure_surface(&surface, &adapter, &device, window.inner_size())?;
+
+        let vertex_buffer = Self::create_triangle_buffer(&device);
+        let pipeline = Self::create_pipeline(&device, config.format)?;
+
+        Ok(Self {
             surface,
             device,
             queue,
             config,
             pipeline,
             vertex_buffer,
-        }
+        })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -88,18 +91,18 @@ impl Renderer {
     fn request_gpu(
         instance: &wgpu::Instance,
         surface: &wgpu::Surface<'_>,
-    ) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+    ) -> Result<(wgpu::Adapter, wgpu::Device, wgpu::Queue), Box<dyn Error>> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
+            compatible_surface: Some(surface),
             force_fallback_adapter: false,
             ..Default::default()
-        }))
-        .unwrap();
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+        }))?;
+        let (device, queue) = pollster::block_on(
+            adapter.request_device(&wgpu::DeviceDescriptor::default()),
+        )?;
 
-        return (adapter, device, queue);
+        Ok((adapter, device, queue))
     }
 
     fn configure_surface(
@@ -107,23 +110,27 @@ impl Renderer {
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         size: winit::dpi::PhysicalSize<u32>,
-    ) -> wgpu::SurfaceConfiguration {
+    ) -> Result<wgpu::SurfaceConfiguration, Box<dyn Error>> {
         let config = surface
-            .get_default_config(&adapter, size.width, size.height)
-            .unwrap();
-        surface.configure(&device, &config);
-        return config;
+            .get_default_config(adapter, size.width, size.height)
+            .ok_or("Failed to get default surface configuration")?;
+        surface.configure(device, &config);
+        Ok(config)
     }
+
     fn create_triangle_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         let vertex_data: [f32; 3 * 3] = [-0.5, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0, -0.5, 0.0];
-        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
-        });
-        return vertex_buffer;
+        })
     }
-    fn create_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+
+    fn create_pipeline(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> Result<wgpu::RenderPipeline, Box<dyn Error>> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -135,7 +142,7 @@ impl Renderer {
             immediate_size: 0,
         });
 
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
@@ -175,6 +182,8 @@ impl Renderer {
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,
-        })
+        });
+
+        Ok(pipeline)
     }
 }

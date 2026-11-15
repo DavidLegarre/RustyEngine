@@ -27,18 +27,31 @@ impl App {
             event_loop.exit();
         }
     }
+
+    fn init_renderer(&mut self, event_loop: &ActiveEventLoop) {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes())
+                .expect("Failed to create window"),
+        );
+
+        match Renderer::new(window.clone()) {
+            Ok(renderer) => {
+                self.renderer = Some(renderer);
+            }
+            Err(e) => {
+                eprintln!("Failed to initialize renderer: {e}");
+                eprintln!("The window will open but no graphics will be drawn.");
+            }
+        }
+
+        self.window = Some(window);
+    }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
-        let renderer = Renderer::new(window.clone());
-        self.window = Some(window);
-        self.renderer = Some(renderer);
+        self.init_renderer(event_loop);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {

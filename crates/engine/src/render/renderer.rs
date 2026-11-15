@@ -98,9 +98,8 @@ impl Renderer {
             force_fallback_adapter: false,
             ..Default::default()
         }))?;
-        let (device, queue) = pollster::block_on(
-            adapter.request_device(&wgpu::DeviceDescriptor::default()),
-        )?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))?;
 
         Ok((adapter, device, queue))
     }

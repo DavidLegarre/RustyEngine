@@ -1,8 +1,10 @@
 use std::error::Error;
 use std::sync::Arc;
 
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::util::DeviceExt;
 use winit::window::Window;
+
+use crate::render::vertex;
 
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
@@ -118,10 +120,9 @@ impl Renderer {
     }
 
     fn create_triangle_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-        let vertex_data: [f32; 3 * 3] = [-0.5, 0.5, 0.0, 0.5, 0.5, 0.0, 0.0, -0.5, 0.0];
-        device.create_buffer_init(&BufferInitDescriptor {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
+            contents: bytemuck::cast_slice(vertex::VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         })
     }

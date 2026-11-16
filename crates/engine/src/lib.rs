@@ -1,4 +1,5 @@
 pub mod app;
+pub mod asset;
 pub mod render;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

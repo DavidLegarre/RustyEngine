@@ -1,10 +1,12 @@
 use std::error::Error;
+use std::path::Path;
 use std::sync::Arc;
 
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use crate::asset::texture;
 use crate::render::vertex;
+use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
@@ -54,6 +56,10 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
+    pub fn load_asset() -> Result<texture::TextureData, Box<dyn Error>> {
+        let texture_path = Path::new("crates/engine/src/assets/happy_tree.png");
+        texture::load_texture_from_path(texture_path)
+    }
     pub fn render(&self) {
         let texture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t) => t,

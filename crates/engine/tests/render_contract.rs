@@ -1,10 +1,12 @@
-//! Headless GPU tests for the render contract: Vertex struct ↔ VertexBufferLayout ↔ WGSL.
+//! Headless GPU tests for the render contract: Vertex struct ↔ VertexBufferLayout ↔ WGSL,
+//! plus the index buffer path.
 
-use super::renderer::Renderer;
-use super::vertex;
+use engine::render::renderer::Renderer;
+use engine::render::vertex;
+use wgpu::util::DeviceExt;
 
 #[test]
-fn vertex_colors_come_from_the_vertex_buffer() {
+fn pentagon_renders_from_vertex_and_index_buffers() {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         ..wgpu::InstanceDescriptor::new_without_display_handle()
@@ -18,7 +20,16 @@ fn vertex_colors_come_from_the_vertex_buffer() {
 
     let pipeline = Renderer::create_pipeline(&device, wgpu::TextureFormat::Rgba8UnormSrgb)
         .expect("pipeline creation failed");
-    let vertex_buffer = Renderer::create_triangle_buffer(&device);
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(vertex::VERTICES),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(vertex::INDICES),
+        usage: wgpu::BufferUsages::INDEX,
+    });
 
     const SIZE: u32 = 64;
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -64,7 +75,8 @@ fn vertex_colors_come_from_the_vertex_buffer() {
         });
         pass.set_pipeline(&pipeline);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        pass.draw(0..vertex::VERTICES.len() as u32, 0..1);
+        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        pass.draw_indexed(0..vertex::INDICES.len() as u32, 0, 0..1);
     }
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),
@@ -106,27 +118,17 @@ fn vertex_colors_come_from_the_vertex_buffer() {
         [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
     };
 
-    // Outside the triangle: background stays black.
+    // Outside the pentagon: background stays black.
     let bg = px(2, 2);
     assert!(
         bg[0] < 10 && bg[1] < 10 && bg[2] < 10,
         "background not black: {bg:?}"
     );
 
-    // Near the top vertex, which is red in VERTICES.
-    let top = px(32, 18);
+    // Pentagon center: every VERTICES color is [0.5, 0.0, 0.5] magenta.
+    let center = px(32, 32);
     assert!(
-        top[0] > 150 && top[1] < 100 && top[2] < 100,
-        "top vertex region not red: {top:?}"
-    );
-
-    // Triangle centroid: three vertex colors interpolate to ~equal channels.
-    let mid = px(32, 37);
-    let lo = mid[0].min(mid[1]).min(mid[2]);
-    let hi = mid[0].max(mid[1]).max(mid[2]);
-    assert!(lo > 100 && hi < 200, "centroid not ~1/3 grey: {mid:?}");
-    assert!(
-        hi - lo < 30,
-        "centroid channels diverge, vertex colors not interpolated: {mid:?}"
+        center[0] > 150 && center[1] < 100 && center[2] > 150,
+        "pentagon center not magenta: {center:?}"
     );
 }

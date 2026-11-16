@@ -13,6 +13,8 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 }
 
 impl Renderer {
@@ -26,7 +28,9 @@ impl Renderer {
         let (adapter, device, queue) = Self::request_gpu(&instance, &surface)?;
         let config = Self::configure_surface(&surface, &adapter, &device, window.inner_size())?;
 
-        let vertex_buffer = Self::create_triangle_buffer(&device);
+        let vertex_buffer = Self::get_vertex_buffer(&device);
+        let index_buffer = Self::get_index_buffer(&device);
+        let num_indices = vertex::INDICES.len() as u32;
         let pipeline = Self::create_pipeline(&device, config.format)?;
 
         Ok(Self {
@@ -36,6 +40,8 @@ impl Renderer {
             config,
             pipeline,
             vertex_buffer,
+            index_buffer,
+            num_indices,
         })
     }
 
@@ -66,7 +72,7 @@ impl Renderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -82,9 +88,10 @@ impl Renderer {
                 occlusion_query_set: None,
                 ..Default::default()
             });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            pass.draw(0..3, 0..1);
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
         self.queue.submit(Some(encoder.finish()));
         self.queue.present(texture);
@@ -119,15 +126,22 @@ impl Renderer {
         Ok(config)
     }
 
-    pub(crate) fn create_triangle_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+    fn get_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(vertex::VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         })
     }
+    fn get_index_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: (Some("Index Buffer")),
+            contents: bytemuck::cast_slice(vertex::INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        })
+    }
 
-    pub(crate) fn create_pipeline(
+    pub fn create_pipeline(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
     ) -> Result<wgpu::RenderPipeline, Box<dyn Error>> {

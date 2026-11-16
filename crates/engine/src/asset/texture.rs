@@ -19,3 +19,9 @@ pub fn load_texture_from_bytes(bytes: &[u8]) -> Result<TextureData, Box<dyn Erro
         rgba: image.to_rgba8(),
     })
 }
+
+/// Sample asset used while following the tutorial. Path is relative to the
+/// workspace root, so it only resolves when run via `cargo run` from there.
+pub fn load_sample_texture() -> Result<TextureData, Box<dyn Error>> {
+    load_texture_from_path(Path::new("crates/engine/src/assets/happy_tree.png"))
+}

@@ -1,24 +1,18 @@
 //! Headless GPU tests for the render contract: Vertex struct ↔ VertexBufferLayout ↔ WGSL,
 //! plus the index buffer path.
 
-use engine::render::renderer::Renderer;
+use engine::render::gpu::Gpu;
+use engine::render::pipeline;
 use engine::render::vertex;
 use wgpu::util::DeviceExt;
 
 #[test]
 fn pentagon_renders_from_vertex_and_index_buffers() {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
-    let adapter =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .expect("no compatible GPU adapter found for headless test");
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("no compatible GPU device found for headless test");
+    let gpu = Gpu::headless().expect("no compatible GPU found for headless test");
+    let device = gpu.device();
+    let queue = gpu.queue();
 
-    let pipeline = Renderer::create_pipeline(&device, wgpu::TextureFormat::Rgba8UnormSrgb)
+    let pipeline = pipeline::create_pipeline(device, wgpu::TextureFormat::Rgba8UnormSrgb)
         .expect("pipeline creation failed");
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),

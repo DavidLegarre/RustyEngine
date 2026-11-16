@@ -1,18 +1,17 @@
 use std::error::Error;
-use std::path::Path;
 use std::sync::Arc;
 
 use winit::window::Window;
 
-use crate::asset::texture;
+use crate::render::gpu::Gpu;
+use crate::render::pipeline;
+use crate::render::swapchain::Swapchain;
 use crate::render::vertex;
 use wgpu::util::DeviceExt;
 
 pub struct Renderer {
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+    gpu: Gpu,
+    swapchain: Swapchain,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -27,19 +26,17 @@ impl Renderer {
         });
         let surface = instance.create_surface(window.clone())?;
 
-        let (adapter, device, queue) = Self::request_gpu(&instance, &surface)?;
-        let config = Self::configure_surface(&surface, &adapter, &device, window.inner_size())?;
+        let (gpu, adapter) = Gpu::from_surface(&instance, &surface)?;
+        let swapchain = Swapchain::new(surface, &adapter, gpu.device(), window.inner_size())?;
 
-        let vertex_buffer = Self::get_vertex_buffer(&device);
-        let index_buffer = Self::get_index_buffer(&device);
+        let vertex_buffer = Self::get_vertex_buffer(gpu.device());
+        let index_buffer = Self::get_index_buffer(gpu.device());
         let num_indices = vertex::INDICES.len() as u32;
-        let pipeline = Self::create_pipeline(&device, config.format)?;
+        let pipeline = pipeline::create_pipeline(gpu.device(), swapchain.format())?;
 
         Ok(Self {
-            surface,
-            device,
-            queue,
-            config,
+            gpu,
+            swapchain,
             pipeline,
             vertex_buffer,
             index_buffer,
@@ -48,34 +45,20 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        if width == 0 || height == 0 {
-            return;
-        }
-        self.config.width = width;
-        self.config.height = height;
-        self.surface.configure(&self.device, &self.config);
+        self.swapchain.resize(self.gpu.device(), width, height);
     }
 
-    pub fn load_asset() -> Result<texture::TextureData, Box<dyn Error>> {
-        let texture_path = Path::new("crates/engine/src/assets/happy_tree.png");
-        texture::load_texture_from_path(texture_path)
-    }
     pub fn render(&self) {
-        let texture = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t) => t,
-            wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface.configure(&self.device, &self.config);
-                return;
-            }
-            _ => return,
+        let Some(texture) = self.swapchain.acquire(self.gpu.device()) else {
+            return;
         };
 
         let view = texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
-            .device
+            .gpu
+            .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -99,37 +82,8 @@ impl Renderer {
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
-        self.queue.submit(Some(encoder.finish()));
-        self.queue.present(texture);
-    }
-
-    fn request_gpu(
-        instance: &wgpu::Instance,
-        surface: &wgpu::Surface<'_>,
-    ) -> Result<(wgpu::Adapter, wgpu::Device, wgpu::Queue), Box<dyn Error>> {
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(surface),
-            force_fallback_adapter: false,
-            ..Default::default()
-        }))?;
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))?;
-
-        Ok((adapter, device, queue))
-    }
-
-    fn configure_surface(
-        surface: &wgpu::Surface<'_>,
-        adapter: &wgpu::Adapter,
-        device: &wgpu::Device,
-        size: winit::dpi::PhysicalSize<u32>,
-    ) -> Result<wgpu::SurfaceConfiguration, Box<dyn Error>> {
-        let config = surface
-            .get_default_config(adapter, size.width, size.height)
-            .ok_or("Failed to get default surface configuration")?;
-        surface.configure(device, &config);
-        Ok(config)
+        self.gpu.queue().submit(Some(encoder.finish()));
+        self.gpu.queue().present(texture);
     }
 
     fn get_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
@@ -139,63 +93,12 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         })
     }
+
     fn get_index_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: (Some("Index Buffer")),
+            label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(vertex::INDICES),
             usage: wgpu::BufferUsages::INDEX,
         })
-    }
-
-    pub fn create_pipeline(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-    ) -> Result<wgpu::RenderPipeline, Box<dyn Error>> {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[],
-            immediate_size: 0,
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(vertex::Vertex::desc())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
-        Ok(pipeline)
     }
 }

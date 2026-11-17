@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use winit::window::Window;
 
+use crate::asset::texture::{self, TextureObject};
 use crate::render::gpu::Gpu;
 use crate::render::pipeline;
 use crate::render::swapchain::Swapchain;
@@ -16,6 +17,8 @@ pub struct Renderer {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+    #[allow(dead_code)] // bound in the texture bind group chapter
+    texture_dto: TextureObject,
 }
 
 impl Renderer {
@@ -33,6 +36,7 @@ impl Renderer {
         let index_buffer = Self::get_index_buffer(gpu.device());
         let num_indices = vertex::INDICES.len() as u32;
         let pipeline = pipeline::create_pipeline(gpu.device(), swapchain.format())?;
+        let texture_dto = texture::load_texture(gpu.device(), gpu.queue(), None)?;
 
         Ok(Self {
             gpu,
@@ -41,6 +45,7 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
+            texture_dto,
         })
     }
 
@@ -84,6 +89,24 @@ impl Renderer {
         }
         self.gpu.queue().submit(Some(encoder.finish()));
         self.gpu.queue().present(texture);
+        self.gpu.queue().write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.texture_dto.diffuse_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            &self.texture_dto.rgba(),
+            // The layout of the texture
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * self.texture_dto.width()),
+                rows_per_image: Some(self.texture_dto.height()),
+            },
+            self.texture_dto.diffuse_texture.size(),
+        );
     }
 
     fn get_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {

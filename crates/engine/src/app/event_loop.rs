@@ -5,20 +5,14 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
+use crate::render::camera::Camera;
 use crate::render::renderer::Renderer;
 
+#[derive(Default)]
 pub struct App {
     pub window: Option<Arc<Window>>,
     pub renderer: Option<Renderer>,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            window: None,
-            renderer: None,
-        }
-    }
+    pub camera: Camera,
 }
 
 impl App {
@@ -64,8 +58,12 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                if let Some(renderer) = self.renderer.as_ref() {
-                    renderer.render();
+                // Destructured so the renderer borrow and the camera borrow stay disjoint.
+                let Self {
+                    renderer, camera, ..
+                } = self;
+                if let Some(renderer) = renderer.as_mut() {
+                    renderer.render(camera);
                 }
             }
             _ => {}

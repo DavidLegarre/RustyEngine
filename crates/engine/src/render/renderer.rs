@@ -4,22 +4,20 @@ use std::sync::Arc;
 use winit::window::Window;
 
 use crate::asset::texture::{self, TextureObject};
-use crate::render::camera::{Camera, CameraUniform};
+use crate::render::camera::Camera;
+use crate::render::camera_uniform::CameraResources;
 use crate::render::gpu::Gpu;
+use crate::render::mesh::Mesh;
 use crate::render::pipeline;
 use crate::render::swapchain::Swapchain;
-use crate::render::vertex;
-use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     gpu: Gpu,
-    camera: Camera,
     swapchain: Swapchain,
     pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    mesh: Mesh,
     texture: TextureObject,
+    camera: CameraResources,
 }
 
 impl Renderer {
@@ -33,47 +31,31 @@ impl Renderer {
         let (gpu, adapter) = Gpu::from_surface(&instance, &surface)?;
         let swapchain = Swapchain::new(surface, &adapter, gpu.device(), window.inner_size())?;
 
-        let vertex_buffer = Self::get_vertex_buffer(gpu.device());
-        let index_buffer = Self::get_index_buffer(gpu.device());
-        let num_indices = vertex::INDICES.len() as u32;
+        // Layouts are the contract: they must exist before the pipeline that uses them.
         let texture_layout = TextureObject::bind_group_layout(gpu.device());
-        let pipeline =
-            pipeline::create_pipeline(gpu.device(), swapchain.format(), &[Some(&texture_layout)])?;
+        let camera_layout = CameraResources::bind_group_layout(gpu.device());
+        let pipeline = pipeline::create_pipeline(
+            gpu.device(),
+            swapchain.format(),
+            &[Some(&texture_layout), Some(&camera_layout)],
+        )?;
+
         let texture = texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
-        let camera = Camera {
-            // position the camera 1 unit up and 2 units back
-            // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_y(),
-            aspect: swapchain.config.width as f32 / swapchain.config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-
-        let camera_buffer = gpu
-            .device()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Camera Buffer"),
-                contents: bytemuck::cast_slice(&[camera_uniform]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+        let mesh = Mesh::pentagon(gpu.device());
+        let camera = CameraResources::new(
+            gpu.device(),
+            &camera_layout,
+            &Camera::default(),
+            swapchain.aspect(),
+        );
 
         Ok(Self {
             gpu,
-            camera,
             swapchain,
             pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
+            mesh,
             texture,
+            camera,
         })
     }
 
@@ -81,10 +63,13 @@ impl Renderer {
         self.swapchain.resize(self.gpu.device(), width, height);
     }
 
-    pub fn render(&self) {
+    pub fn render(&mut self, camera: &Camera) {
         let Some(texture) = self.swapchain.acquire(self.gpu.device()) else {
             return;
         };
+
+        self.camera
+            .update(self.gpu.queue(), camera, self.swapchain.aspect());
 
         let view = texture
             .texture
@@ -112,27 +97,10 @@ impl Renderer {
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.texture.diffuse_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            render_pass.set_bind_group(1, self.camera.bind_group(), &[]);
+            self.mesh.draw(&mut render_pass);
         }
         self.gpu.queue().submit(Some(encoder.finish()));
         self.gpu.queue().present(texture);
-    }
-
-    fn get_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertex::VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        })
-    }
-
-    fn get_index_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(vertex::INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        })
     }
 }

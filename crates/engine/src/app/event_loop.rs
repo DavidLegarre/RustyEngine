@@ -6,6 +6,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use crate::render::camera::Camera;
+use crate::render::camera::CameraController;
 use crate::render::renderer::Renderer;
 
 #[derive(Default)]
@@ -13,12 +14,23 @@ pub struct App {
     pub window: Option<Arc<Window>>,
     pub renderer: Option<Renderer>,
     pub camera: Camera,
+    pub camera_controller: CameraController,
 }
 
 impl App {
     fn handle_key(&mut self, event_loop: &ActiveEventLoop, event: &KeyEvent) {
-        if event.state.is_pressed() && event.physical_key == PhysicalKey::Code(KeyCode::Escape) {
+        let PhysicalKey::Code(code) = event.physical_key else {
+            return;
+        };
+        let pressed = event.state.is_pressed();
+
+        if pressed && code == KeyCode::Escape {
             event_loop.exit();
+            return;
+        }
+
+        if self.camera_controller.handle_key(code, pressed) {
+            self.camera_controller.update_camera(&mut self.camera);
         }
     }
 

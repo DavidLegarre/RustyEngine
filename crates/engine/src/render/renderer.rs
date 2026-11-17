@@ -17,7 +17,7 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     mesh: Mesh,
     texture: TextureObject,
-    camera: CameraResources,
+    camera_resources: CameraResources,
 }
 
 impl Renderer {
@@ -42,7 +42,7 @@ impl Renderer {
 
         let texture = texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
         let mesh = Mesh::pentagon(gpu.device());
-        let camera = CameraResources::new(
+        let camera_resources = CameraResources::new(
             gpu.device(),
             &camera_layout,
             &Camera::default(),
@@ -55,7 +55,7 @@ impl Renderer {
             pipeline,
             mesh,
             texture,
-            camera,
+            camera_resources,
         })
     }
 
@@ -68,7 +68,7 @@ impl Renderer {
             return;
         };
 
-        self.camera
+        self.camera_resources
             .update(self.gpu.queue(), camera, self.swapchain.aspect());
 
         let view = texture
@@ -97,7 +97,7 @@ impl Renderer {
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.texture.diffuse_bind_group, &[]);
-            render_pass.set_bind_group(1, self.camera.bind_group(), &[]);
+            render_pass.set_bind_group(1, self.camera_resources.bind_group(), &[]);
             self.mesh.draw(&mut render_pass);
         }
         self.gpu.queue().submit(Some(encoder.finish()));

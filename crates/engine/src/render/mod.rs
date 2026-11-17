@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod gpu;
+pub mod instance;
 pub mod mesh;
 pub mod pipeline;
 pub mod renderer;

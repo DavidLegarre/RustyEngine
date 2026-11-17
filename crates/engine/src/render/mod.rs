@@ -1,5 +1,4 @@
 pub mod camera;
-pub mod camera_uniform;
 pub mod gpu;
 pub mod mesh;
 pub mod pipeline;

@@ -5,7 +5,7 @@ use winit::window::Window;
 
 use crate::asset::texture::{self, TextureObject};
 use crate::render::camera::Camera;
-use crate::render::camera_uniform::CameraResources;
+use crate::render::camera::CameraResources;
 use crate::render::gpu::Gpu;
 use crate::render::mesh::Mesh;
 use crate::render::pipeline;

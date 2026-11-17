@@ -5,7 +5,7 @@
 
 use engine::asset::texture::{self, TextureObject};
 use engine::render::camera::Camera;
-use engine::render::camera_uniform::CameraResources;
+use engine::render::camera::CameraResources;
 use engine::render::gpu::Gpu;
 use engine::render::mesh::Mesh;
 use engine::render::pipeline;

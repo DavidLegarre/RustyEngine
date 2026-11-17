@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::render::camera::Camera;
+use crate::render::camera::camera::Camera;
 
 #[repr(C)]
 // This is so we can store this in a buffer

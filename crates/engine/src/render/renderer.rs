@@ -4,6 +4,7 @@ use std::sync::Arc;
 use winit::window::Window;
 
 use crate::asset::texture::{self, TextureObject};
+use crate::render::camera::{Camera, CameraUniform};
 use crate::render::gpu::Gpu;
 use crate::render::pipeline;
 use crate::render::swapchain::Swapchain;
@@ -12,6 +13,7 @@ use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     gpu: Gpu,
+    camera: Camera,
     swapchain: Swapchain,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
@@ -38,9 +40,34 @@ impl Renderer {
         let pipeline =
             pipeline::create_pipeline(gpu.device(), swapchain.format(), &[Some(&texture_layout)])?;
         let texture = texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
+        let camera = Camera {
+            // position the camera 1 unit up and 2 units back
+            // +z is out of the screen
+            eye: (0.0, 1.0, 2.0).into(),
+            // have it look at the origin
+            target: (0.0, 0.0, 0.0).into(),
+            // which way is "up"
+            up: cgmath::Vector3::unit_y(),
+            aspect: swapchain.config.width as f32 / swapchain.config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
+
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+
+        let camera_buffer = gpu
+            .device()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Camera Buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
         Ok(Self {
             gpu,
+            camera,
             swapchain,
             pipeline,
             vertex_buffer,

@@ -2,7 +2,7 @@ use std::error::Error;
 
 pub struct Swapchain {
     surface: wgpu::Surface<'static>,
-    config: wgpu::SurfaceConfiguration,
+    pub config: wgpu::SurfaceConfiguration,
     #[allow(dead_code)] // depth chapter arrives here, not in Renderer
     depth: Option<wgpu::Texture>,
 }

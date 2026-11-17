@@ -16,8 +16,6 @@ pub struct TextureObject {
 }
 
 impl TextureObject {
-    /// Layout the pipeline must declare. Create it once, before the pipeline,
-    /// and hand the same instance to `load_texture`.
     pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("texture_bind_group_layout"),

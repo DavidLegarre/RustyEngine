@@ -5,6 +5,7 @@ use crate::render::vertex;
 pub fn create_pipeline(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
 ) -> Result<wgpu::RenderPipeline, Box<dyn Error>> {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader"),
@@ -13,7 +14,7 @@ pub fn create_pipeline(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
-        bind_group_layouts: &[],
+        bind_group_layouts,
         immediate_size: 0,
     });
 

@@ -9,19 +9,50 @@ pub struct TextureData {
 
 pub struct TextureObject {
     pub diffuse_texture: wgpu::Texture,
-    pub texture_data: TextureData,
+    pub diffuse_texture_view: wgpu::TextureView,
+    pub diffuse_sampler: wgpu::Sampler,
+    pub diffuse_bind_group: wgpu::BindGroup,
+    pub diffuse_texture_data: TextureData,
 }
 
 impl TextureObject {
+    /// Layout the pipeline must declare. Create it once, before the pipeline,
+    /// and hand the same instance to `load_texture`.
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("texture_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    // Must match `filterable: true` on the texture entry above.
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        })
+    }
+
     pub fn width(&self) -> u32 {
-        self.texture_data.dimensions.0
+        self.diffuse_texture_data.dimensions.0
     }
 
     pub fn height(&self) -> u32 {
-        self.texture_data.dimensions.1
+        self.diffuse_texture_data.dimensions.1
     }
+
     pub fn rgba(&self) -> &RgbaImage {
-        &self.texture_data.rgba
+        &self.diffuse_texture_data.rgba
     }
 }
 
@@ -30,6 +61,7 @@ const SAMPLE_TEXTURE_PNG: &[u8] = include_bytes!("../assets/happy_tree.png");
 pub fn load_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
     path: Option<&Path>,
 ) -> Result<TextureObject, Box<dyn Error>> {
     let texture_data = match path {
@@ -43,7 +75,7 @@ pub fn load_texture(
         depth_or_array_layers: 1,
     };
 
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
+    let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Diffuse Texture"),
         size,
         mip_level_count: 1,
@@ -56,7 +88,7 @@ pub fn load_texture(
 
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
-            texture: &texture,
+            texture: &diffuse_texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -70,9 +102,40 @@ pub fn load_texture(
         size,
     );
 
+    let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("Diffuse Sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+        ..Default::default()
+    });
+
+    let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("diffuse_bind_group"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+            },
+        ],
+    });
+
     Ok(TextureObject {
-        diffuse_texture: texture,
-        texture_data,
+        diffuse_texture,
+        diffuse_texture_view,
+        diffuse_sampler,
+        diffuse_bind_group,
+        diffuse_texture_data: texture_data,
     })
 }
 

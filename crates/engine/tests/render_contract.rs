@@ -1,6 +1,7 @@
 //! Headless GPU tests for the render contract: Vertex struct ↔ VertexBufferLayout ↔ WGSL,
 //! plus the index buffer path.
 
+use engine::asset::texture::{self, TextureObject};
 use engine::render::gpu::Gpu;
 use engine::render::pipeline;
 use engine::render::vertex;
@@ -12,8 +13,15 @@ fn pentagon_renders_from_vertex_and_index_buffers() {
     let device = gpu.device();
     let queue = gpu.queue();
 
-    let pipeline = pipeline::create_pipeline(device, wgpu::TextureFormat::Rgba8UnormSrgb)
-        .expect("pipeline creation failed");
+    let texture_layout = TextureObject::bind_group_layout(device);
+    let pipeline = pipeline::create_pipeline(
+        device,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+        &[Some(&texture_layout)],
+    )
+    .expect("pipeline creation failed");
+    let texture = texture::load_texture(device, queue, &texture_layout, None)
+        .expect("texture loading failed");
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(vertex::VERTICES),
@@ -68,6 +76,7 @@ fn pentagon_renders_from_vertex_and_index_buffers() {
             ..Default::default()
         });
         pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &texture.diffuse_bind_group, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         pass.draw_indexed(0..vertex::INDICES.len() as u32, 0, 0..1);
@@ -119,10 +128,23 @@ fn pentagon_renders_from_vertex_and_index_buffers() {
         "background not black: {bg:?}"
     );
 
-    // Pentagon center: every VERTICES color is [0.5, 0.0, 0.5] magenta.
+    // Pentagon center sits at uv (0.5, 0.5), so the fragment color must come from
+    // the middle of the diffuse texture. Allow for linear filtering between texels.
+    let expected = texture
+        .rgba()
+        .get_pixel(texture.width() / 2, texture.height() / 2)
+        .0;
     let center = px(32, 32);
     assert!(
-        center[0] > 150 && center[1] < 100 && center[2] > 150,
-        "pentagon center not magenta: {center:?}"
+        center != [0, 0, 0, 255],
+        "pentagon center not drawn: {center:?}"
     );
+    for channel in 0..3 {
+        let diff = center[channel].abs_diff(expected[channel]);
+        assert!(
+            diff <= 60,
+            "channel {channel}: rendered {:?} vs texture {expected:?}",
+            center
+        );
+    }
 }

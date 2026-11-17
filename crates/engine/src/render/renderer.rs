@@ -17,8 +17,7 @@ pub struct Renderer {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    #[allow(dead_code)] // bound in the texture bind group chapter
-    texture_dto: TextureObject,
+    texture: TextureObject,
 }
 
 impl Renderer {
@@ -35,8 +34,10 @@ impl Renderer {
         let vertex_buffer = Self::get_vertex_buffer(gpu.device());
         let index_buffer = Self::get_index_buffer(gpu.device());
         let num_indices = vertex::INDICES.len() as u32;
-        let pipeline = pipeline::create_pipeline(gpu.device(), swapchain.format())?;
-        let texture_dto = texture::load_texture(gpu.device(), gpu.queue(), None)?;
+        let texture_layout = TextureObject::bind_group_layout(gpu.device());
+        let pipeline =
+            pipeline::create_pipeline(gpu.device(), swapchain.format(), &[Some(&texture_layout)])?;
+        let texture = texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
 
         Ok(Self {
             gpu,
@@ -45,7 +46,7 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
-            texture_dto,
+            texture,
         })
     }
 
@@ -83,30 +84,13 @@ impl Renderer {
                 ..Default::default()
             });
             render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.texture.diffuse_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
         self.gpu.queue().submit(Some(encoder.finish()));
         self.gpu.queue().present(texture);
-        self.gpu.queue().write_texture(
-            // Tells wgpu where to copy the pixel data
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.texture_dto.diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // The actual pixel data
-            &self.texture_dto.rgba(),
-            // The layout of the texture
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * self.texture_dto.width()),
-                rows_per_image: Some(self.texture_dto.height()),
-            },
-            self.texture_dto.diffuse_texture.size(),
-        );
     }
 
     fn get_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {

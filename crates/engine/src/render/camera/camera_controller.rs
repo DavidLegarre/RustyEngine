@@ -12,7 +12,8 @@ pub struct CameraController {
 
 impl Default for CameraController {
     fn default() -> Self {
-        Self::new(0.2)
+        // Units per second. The default camera sits ~2.2 units from the target.
+        Self::new(2.0)
     }
 }
 
@@ -49,19 +50,30 @@ impl CameraController {
         }
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) {
+    /// True while any movement key is held, so the app knows to keep animating.
+    pub fn is_moving(&self) -> bool {
+        self.is_forward_pressed
+            || self.is_backward_pressed
+            || self.is_left_pressed
+            || self.is_right_pressed
+    }
+
+    /// Move the camera by `speed * delta_seconds`, so speed is units per second.
+    pub fn update_camera(&self, camera: &mut Camera, delta_seconds: f32) {
         use cgmath::InnerSpace;
+        let step = self.speed * delta_seconds;
+
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
+        if self.is_forward_pressed && forward_mag > step {
+            camera.eye += forward_norm * step;
         }
         if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
+            camera.eye -= forward_norm * step;
         }
 
         let right = forward_norm.cross(camera.up);
@@ -74,10 +86,10 @@ impl CameraController {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
+            camera.eye = camera.target - (forward + right * step).normalize() * forward_mag;
         }
         if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+            camera.eye = camera.target - (forward - right * step).normalize() * forward_mag;
         }
     }
 }

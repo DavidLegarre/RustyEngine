@@ -7,9 +7,20 @@ use crate::asset::texture::{self, TextureObject};
 use crate::render::camera::Camera;
 use crate::render::camera::CameraResources;
 use crate::render::gpu::Gpu;
+use crate::render::instance::Instance;
 use crate::render::mesh::Mesh;
 use crate::render::pipeline;
 use crate::render::swapchain::Swapchain;
+
+use cgmath::prelude::*;
+use wgpu::util::DeviceExt;
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
 
 pub struct Renderer {
     gpu: Gpu,
@@ -18,6 +29,8 @@ pub struct Renderer {
     mesh: Mesh,
     texture: TextureObject,
     camera_resources: CameraResources,
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
 }
 
 impl Renderer {
@@ -48,6 +61,39 @@ impl Renderer {
             &Camera::default(),
             swapchain.aspect(),
         );
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: x as f32,
+                        y: 0.0,
+                        z: z as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = if position.is_zero() {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can affect scale if they're not created correctly
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = gpu
+            .device()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
         Ok(Self {
             gpu,
@@ -56,6 +102,8 @@ impl Renderer {
             mesh,
             texture,
             camera_resources,
+            instances,
+            instance_buffer,
         })
     }
 
@@ -98,7 +146,9 @@ impl Renderer {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.texture.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, self.camera_resources.bind_group(), &[]);
-            self.mesh.draw(&mut render_pass);
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            self.mesh
+                .draw(&mut render_pass, 0..self.instances.len() as u32);
         }
         self.gpu.queue().submit(Some(encoder.finish()));
         self.gpu.queue().present(texture);

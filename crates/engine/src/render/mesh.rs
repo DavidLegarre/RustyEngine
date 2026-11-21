@@ -33,9 +33,9 @@ impl Mesh {
         Self::new(device, vertex::VERTICES, vertex::INDICES)
     }
 
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, instances: std::ops::Range<u32>) {
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        pass.draw_indexed(0..self.num_indices, 0, 0..1);
+        pass.draw_indexed(0..self.num_indices, 0, instances);
     }
 }

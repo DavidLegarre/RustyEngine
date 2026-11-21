@@ -15,7 +15,6 @@ pub struct App {
     pub renderer: Option<Renderer>,
     pub camera: Camera,
     pub camera_controller: CameraController,
-    /// Set when something changed; cleared once a frame is requested.
     needs_redraw: bool,
     last_frame: Option<Instant>,
 }

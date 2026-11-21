@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::render::vertex;
+use crate::render::{instance::InstanceRaw, vertex::Vertex};
 
 pub fn create_pipeline(
     device: &wgpu::Device,
@@ -24,7 +24,7 @@ pub fn create_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
-            buffers: &[Some(vertex::Vertex::desc())],
+            buffers: &[Some(Vertex::desc()), Some(InstanceRaw::desc())],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {

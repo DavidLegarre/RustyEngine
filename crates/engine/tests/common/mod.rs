@@ -7,8 +7,10 @@ use engine::asset::texture::{self, TextureObject};
 use engine::render::camera::Camera;
 use engine::render::camera::CameraResources;
 use engine::render::gpu::Gpu;
+use engine::render::instance::Instance;
 use engine::render::mesh::Mesh;
 use engine::render::pipeline;
+use wgpu::util::DeviceExt;
 
 pub const SIZE: u32 = 64;
 pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -62,6 +64,12 @@ pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
     let mesh = Mesh::pentagon(device);
     let camera_resources = CameraResources::new(device, &camera_layout, camera, 1.0);
 
+    let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Instance Buffer"),
+        contents: bytemuck::cast_slice(&[Instance::default().to_raw()]),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("offscreen render target"),
         size: wgpu::Extent3d {
@@ -106,7 +114,8 @@ pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &texture.diffuse_bind_group, &[]);
         pass.set_bind_group(1, camera_resources.bind_group(), &[]);
-        mesh.draw(&mut pass);
+        pass.set_vertex_buffer(1, instance_buffer.slice(..));
+        mesh.draw(&mut pass, 0..1);
     }
     encoder.copy_texture_to_buffer(
         target.as_image_copy(),

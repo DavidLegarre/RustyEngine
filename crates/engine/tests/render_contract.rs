@@ -22,10 +22,7 @@ fn assert_background_is_black(frame: &Frame) {
     );
 }
 
-fn assert_center_samples_the_texture(
-    frame: &Frame,
-    texture: &engine::asset::texture::TextureObject,
-) {
+fn assert_center_samples_the_texture(frame: &Frame, texture: &engine::asset::texture::TextureData) {
     // The pentagon center sits at uv (0.5, 0.5), so the fragment color must come
     // from the middle of the diffuse texture. Allow for linear filtering between texels.
     let expected = texture

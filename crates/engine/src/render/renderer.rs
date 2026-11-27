@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use winit::window::Window;
 
-use crate::asset::texture::{self, TextureObject};
+use crate::asset::texture::{self, TextureObject, TextureResources};
 use crate::render::camera::Camera;
 use crate::render::camera::CameraResources;
 use crate::render::gpu::Gpu;
@@ -27,7 +27,9 @@ pub struct Renderer {
     swapchain: Swapchain,
     pipeline: wgpu::RenderPipeline,
     mesh: Mesh,
+    #[allow(dead_code)] // the bind group samples it; keep the texture alive alongside it
     texture: TextureObject,
+    texture_resources: TextureResources,
     camera_resources: CameraResources,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
@@ -53,7 +55,8 @@ impl Renderer {
             &[Some(&texture_layout), Some(&camera_layout)],
         )?;
 
-        let texture = texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
+        let (texture, texture_resources) =
+            texture::load_texture(gpu.device(), gpu.queue(), &texture_layout, None)?;
         let mesh = Mesh::pentagon(gpu.device());
         let camera_resources = CameraResources::new(
             gpu.device(),
@@ -101,6 +104,7 @@ impl Renderer {
             pipeline,
             mesh,
             texture,
+            texture_resources,
             camera_resources,
             instances,
             instance_buffer,
@@ -144,7 +148,7 @@ impl Renderer {
                 ..Default::default()
             });
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.texture.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(0, &self.texture_resources.bind_group, &[]);
             render_pass.set_bind_group(1, self.camera_resources.bind_group(), &[]);
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             self.mesh

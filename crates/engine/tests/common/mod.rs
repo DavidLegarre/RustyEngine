@@ -3,7 +3,7 @@
 // Each test binary compiles this module separately and uses a different subset.
 #![allow(dead_code)]
 
-use engine::asset::texture::{self, TextureObject};
+use engine::asset::texture::{self, TextureData, TextureObject};
 use engine::render::camera::Camera;
 use engine::render::camera::CameraResources;
 use engine::render::gpu::Gpu;
@@ -46,7 +46,7 @@ impl Frame {
     }
 }
 
-pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
+pub fn render_pentagon(camera: &Camera) -> (Frame, TextureData) {
     let gpu = Gpu::headless().expect("no compatible GPU found for headless test");
     let device = gpu.device();
     let queue = gpu.queue();
@@ -59,7 +59,7 @@ pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
         &[Some(&texture_layout), Some(&camera_layout)],
     )
     .expect("pipeline creation failed");
-    let texture = texture::load_texture(device, queue, &texture_layout, None)
+    let (_texture, texture_resources) = texture::load_texture(device, queue, &texture_layout, None)
         .expect("texture loading failed");
     let mesh = Mesh::pentagon(device);
     let camera_resources = CameraResources::new(device, &camera_layout, camera, 1.0);
@@ -112,7 +112,7 @@ pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
             ..Default::default()
         });
         pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &texture.diffuse_bind_group, &[]);
+        pass.set_bind_group(0, &texture_resources.bind_group, &[]);
         pass.set_bind_group(1, camera_resources.bind_group(), &[]);
         pass.set_vertex_buffer(1, instance_buffer.slice(..));
         mesh.draw(&mut pass, 0..1);
@@ -152,5 +152,5 @@ pub fn render_pentagon(camera: &Camera) -> (Frame, TextureObject) {
     drop(mapped);
     readback.unmap();
 
-    (Frame { pixels }, texture)
+    (Frame { pixels }, texture_resources.data)
 }
